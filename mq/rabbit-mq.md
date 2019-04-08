@@ -1,5 +1,25 @@
 # RabbitMQ 学习笔记
 
+> 消息队列的优点: `实现异步`, `系统解耦`, `流量削峰`
+
+> 发布订阅模式, 广播通讯, 实现AMQP协议, 消息队列本质是解决通讯问题
+Broker: 
+VirtualHost: 一个Broker下面可创建多个虚拟机, 提高硬件应用率, 资源隔离(不同虚拟机下可定义同名交换机, 同名队列), 安装时会提供默认虚拟机:`/`
+交换机: 解决消息的灵活路由问题, 地址列表, 查找和队列的绑定关系, 将消息分发到符合绑定关系的队列上
+队列: 独立运行的进程, 有自己的数据库存储消息, 先进先出 
+TCP长连接 包括多个 虚拟连接: 消息信道(Channel) API
+
+直连类型交换机(DIRECT_EXCHANGE): 
+binging key(精确的绑定关键字) 
+routing key(路由关键字)
+
+主题类型交换机(TOPIC_EXCHANGE): 
+binging key(匹配的绑定关键字): # 匹配0个或者多个单词  * 匹配一个单词
+routing key(路由关键字)
+
+广播类型的交换机(FANOUT_EXCHANGE): 
+无需绑定关键字和路由关键字, 发送消息时所有关联的队列都会收到
+
 ## rabbit-mq 安装
 ---
 > 在阿里云 CentOS 7.3 系统中安装
@@ -105,3 +125,74 @@ vi /etc/rabbitmq/rabbitmq.config
 
 ## rabbit-mq 在 spring-boot 中使用
 ---
+### 配置类
+
+### 生产者
+AmqpTemplate:
+    convertAndSend(exchange, routingKey, content)
+
+### 消费者
+
+### 配置文件
+```
+rabbitmq.host
+rabbitmq.port
+rabbitmq.virtual-host
+rabbitmq.host
+rabbitmq.host
+rabbitmq.host
+```
+
+## rabbit-mq 消息可靠性投递解决方案
+
+### 确保消息成功发送到RabbitMQ服务器
+
+### 事务模式
+```
+try {
+    txSelect
+    txPublish
+    txCommit
+} catch (e) {
+    txRollback
+}
+```
+
+### 确认模式
+#### 简单确认模式
+#### 批量确认模式
+#### 异步确认模式
+
+### 确保消息路由到正确的队列
+转发给自己 ReturnListener
+指定交换机的备份交换机
+
+###
+#### 队列持久化
+#### 交换机持久化
+#### 消息持久化
+
+高可用
+集群
+
+### 确保消息从队列正确的投递到消费者
+#### 自动ACK
+消费者接收到消息时就立即返回ACK, 无论业务方法是否执行完
+#### 手动ACK
+```
+try {
+
+} finally {
+    // 防止消息在队列里堆积
+    channel.basicAck();
+}
+```
+
+### 生产者怎么知道消费者是否正确消费了消息
+#### 消费者回调
+* 生产者发送消息时提供回调接口, 消费者接收到消息处理后调用回调API
+* 消费者接收到消息后发送应达消息
+#### 补偿机制
+* 消息重发(重发消息是否与原消息一致? 控制次数(计数器)? 根据流水日志进行对照)
+#### 消息幂等性
+* 消费者处理消息时的逻辑具有幂等性(流水号 bizId 唯一的) 处理前根据bizId查重
