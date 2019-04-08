@@ -1,12 +1,15 @@
-## rabbit-mq 安装
-> 在阿里云 CentOS 7.3 系统中安装
+# RabbitMQ 学习笔记
 
+## rabbit-mq 安装
+---
+> 在阿里云 CentOS 7.3 系统中安装
 ### 1. 安装 erlang
 ```
 yum install erlang
 ```
 
 ### 2. 下载 安装包
+> 可自行查找下载其它的版本
 ```
 wget http://www.rabbitmq.com/releases/rabbitmq-server/v3.6.6/rabbitmq-server-3.6.6-1.el7.noarch.rpm
 ```
@@ -14,9 +17,8 @@ wget http://www.rabbitmq.com/releases/rabbitmq-server/v3.6.6/rabbitmq-server-3.6
 ```
 yum install rabbitmq-server-3.6.6-1.el7.noarch.rpm 
 ```
-
 ## rabbit-mq 命令
-
+---
 ### 启动
 ```
 service rabbitmq-server start
@@ -53,6 +55,7 @@ rabbitmqctl set_permissions -p /vhost setsuna '.*' '.*''.*'
 ```
 
 ## rabbit-mq 角色
+---
 ### none 
 > 不能访问 Web端管理平台, 一般的消费者和生产者使用此角色
 
@@ -80,3 +83,25 @@ rabbitmqctl set_permissions -p /vhost setsuna '.*' '.*''.*'
 * 查看、创建和删除 users
 * 查看创建和删除 permissions
 * 关闭其他用户的 connections
+
+## rabbit-mq 配置
+---
+> 一般来说默认的配置文件路径如下 /etc/rabbitmq/rabbitmq.config 默认没有这个文件, 需自己创建, 更多信息可查看官网的 [配置说明](https://www.rabbitmq.com/configure.html)
+```
+vi /etc/rabbitmq/rabbitmq.config
+```
+
+### 修改服务的默认端口号
+```
+[
+  {rabbit, [
+      {tcp_listeners, [5673]}
+    ]
+  }
+].
+```
+...
+
+
+## rabbit-mq 在 spring-boot 中使用
+---
