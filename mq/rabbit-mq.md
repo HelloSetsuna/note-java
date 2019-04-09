@@ -3,22 +3,7 @@
 > 消息队列的优点: `实现异步`, `系统解耦`, `流量削峰`
 
 > 发布订阅模式, 广播通讯, 实现AMQP协议, 消息队列本质是解决通讯问题
-Broker: 
-VirtualHost: 一个Broker下面可创建多个虚拟机, 提高硬件应用率, 资源隔离(不同虚拟机下可定义同名交换机, 同名队列), 安装时会提供默认虚拟机:`/`
-交换机: 解决消息的灵活路由问题, 地址列表, 查找和队列的绑定关系, 将消息分发到符合绑定关系的队列上
-队列: 独立运行的进程, 有自己的数据库存储消息, 先进先出 
-TCP长连接 包括多个 虚拟连接: 消息信道(Channel) API
 
-直连类型交换机(DIRECT_EXCHANGE): 
-binging key(精确的绑定关键字) 
-routing key(路由关键字)
-
-主题类型交换机(TOPIC_EXCHANGE): 
-binging key(匹配的绑定关键字): # 匹配0个或者多个单词  * 匹配一个单词
-routing key(路由关键字)
-
-广播类型的交换机(FANOUT_EXCHANGE): 
-无需绑定关键字和路由关键字, 发送消息时所有关联的队列都会收到
 
 ## rabbit-mq 安装
 ---
@@ -120,19 +105,56 @@ vi /etc/rabbitmq/rabbitmq.config
   }
 ].
 ```
-...
+
+## rabbit-mq 理解
+---
+### 概念理解
+![基本架构图](./assets/rabbit-mq-1.png)
+
+* Exchange：消息交换机，指定消息按什么规则，路由到哪个队列。
+
+* Queue：消息队列，每个消息都会被投入到一个或者多个队列里, 独立运行的进程, 有自己的数据库存储消息, 先进先出。
+
+* Binding：绑定，它的作用是把 exchange 和 queue 按照路由规则 binding 起来。
+
+* Routing Key：路由关键字，exchange根据这个关键字进行消息投递。
+
+* Virtual Host: 虚拟主机，一个broker里可以开设多个vhost，用作不用用户的权限分离。每个virtual host本质上都是一个RabbitMQ Server（但是一个server中可以有多个virtual host），拥有它自己若干的个Exchange、Queue和bings rule等等。其实这是一个虚拟概念，类似于权限控制组。Virtual Host是权限控制的最小粒度, 提高硬件应用率, 资源隔离(不同虚拟机下可定义同名交换机, 同名队列), 安装时会提供默认虚拟机:`/`。
+
+* Producer：消息生产者，就是投递消息的程序。
+
+* Consumer：消息消费者，就是接受消息的程序。
+
+* Connection: 就是一个TCP的连接。Producer和Consumer都是通过TCP连接到RabbitMQ Server的。接下来的实践案例中我们就可以看到，producer和consumer与exchange的通信的前提是先建立TCP连接。仅仅创建了TCP连接，producer和consumer与exchange还是不能通信的。我们还需要为每一个Connection创建Channel。
+
+* Channel: 消息信道, 它是建立在上述TCP连接之上的虚拟连接。数据传输都是在Channel中进行的。AMQP协议规定只有通过Channel才能执行AMQP的命令。一个Connection可以包含多个Channel。有人要问了，为什么要使用Channel呢，直接用TCP连接不就好了么？对于一个消息服务器来说，它的任务是处理海量的消息，当有很多线程需要从RabbitMQ中消费消息或者生产消息，那么必须建立很多个connection，也就是许多个TCP连接。然而对于操作系统而言，建立和关闭TCP连接是非常昂贵的开销，而且TCP的连接数也有限制，频繁的建立关闭TCP连接对于系统的性能有很大的影响，如果遇到高峰，性能瓶颈也随之显现。RabbitMQ采用类似NIO的做法，选择TCP连接复用，不仅可以减少性能开销，同时也便于管理。在TCP连接中建立Channel是没有上述代价的，可以复用TCP连接。对于Producer或者Consumer来说，可以并发的使用多个Channel进行Publish或者Receive。有实验表明，在Channel中，1秒可以Publish10K的数据包。对于普通的Consumer或者Producer来说，这已经足够了。除非有非常大的流量时，一个connection可能会产生性能瓶颈，此时就需要开辟多个connection。
+
+
+### 交换机说明
+
+#### 直连类型交换机(DIRECT_EXCHANGE): 
+![直连类型交换机](./assets/rabbit-mq-2.png)
+* binging key(精确的绑定关键字) 
+* routing key(路由关键字)
+
+#### 主题类型交换机(TOPIC_EXCHANGE): 
+![主题类型交换机](./assets/rabbit-mq-3.png)
+* binging key(匹配的绑定关键字): `#` 匹配0个或者多个单词  `*` 匹配一个单词
+* routing key(路由关键字)
+
+#### 广播类型的交换机(FANOUT_EXCHANGE): 
+* 无需绑定关键字和路由关键字, 发送消息时所有关联的队列都会收到
 
 
 ## rabbit-mq 在 spring-boot 中使用
 ---
-### 配置类
-
-### 生产者
-AmqpTemplate:
-    convertAndSend(exchange, routingKey, content)
-
-### 消费者
-
+### Maven 依赖
+```
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-amqp</artifactId>
+</dependency>
+```
 ### 配置文件
 ```
 rabbitmq.host
@@ -143,8 +165,18 @@ rabbitmq.host
 rabbitmq.host
 ```
 
-## rabbit-mq 消息可靠性投递解决方案
+### 配置类
 
+### 生产者
+AmqpTemplate:
+    convertAndSend(exchange, routingKey, content)
+
+### 消费者
+
+
+
+## rabbit-mq 消息可靠性投递解决方案
+---
 ### 确保消息成功发送到RabbitMQ服务器
 
 ### 事务模式
@@ -176,6 +208,7 @@ try {
 集群
 
 ### 确保消息从队列正确的投递到消费者
+---
 #### 自动ACK
 消费者接收到消息时就立即返回ACK, 无论业务方法是否执行完
 #### 手动ACK
